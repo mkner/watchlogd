@@ -1,0 +1,194 @@
+watchlogd change log
+--------------------
+
+mike knerr <mk@enonova.com>
+
+0.91 --> 0.91a
+
+03/17/98
+        * watchlog.c call to pidFetch does not log an error if pid file does
+	  not exist since this function is also called when
+	  verifying that the daemon is not already running
+	  (ie. before daemon runs and if there is no pid file 
+	  at that point then this is not an error)
+
+        * log.c does not use a /tmp file for error log trace (for the usual reasons)
+	  create a file in /var/lib/watchlogd instead 
+	  
+	* move unlink to remove error log file
+	  thanks to Claus-Justus Heine <claus@momo.math.rwth-aachen.de>
+	  for pointing it out
+	    
+	
+0.00 --> 0.91 
+
+03/06/97
+        * log module will not print *any* msg on
+          stdout or stderr if in daemon mode and not test mode 
+          instead use verbose mode to get trace in syslog
+          and/or set 'mailerrors on' to get mailed a 
+          log of error level messages. if in daemon mode and
+          test mode then some errorlogfile type errors will
+          go to stderr for debuging purposes
+
+        * recognize other exec pathnames like:
+          /usr/sbin/watchlogd ./watchlogd
+
+        * update man page
+
+03/05/97 
+        * add senderrors {on|off} option for
+          global config file /etc/watchlog.conf
+
+        * move errorlogfile handling into log module
+          automatically opens errorfile when receives
+          first err log msg. logSendErrorLog closes
+          file out and attempts to send. errorlogfile
+          is opened again on next err log msg
+
+        * verbose for a daemon
+          outputs test level log messages to syslog
+          at info level and dups error level messages
+          to errorlog and prints nothing to stderr. 
+          using verbose mode with watchlog  is same
+          as test mode
+
+03/04/97
+        * config is now loaded before waiting to start
+          initial processing in anticipation of other
+          global options in /etc/watchlogd.conf for
+          start time and intervals
+
+        * check is now checklog and has an off option in 
+          anticipation of scanlog {on|off} 
+
+        * verbose (-V) mode now shows same output as test mode
+          but operations are actually executed
+
+03/03/97
+        * fix parsing of createmode options:
+
+           - use strncpy into known buffer for sscanf for safety
+         
+           - detect and report the following errors:
+
+               failed sscanf parse!!
+               no args
+               too many args
+               invalid mode
+               invalid owner
+               invalid group
+               valid mode
+               valid mode,owner
+               valid mode,owner,group
+   
+           - test mode shows createmode options set (if valid)
+
+        * clean up test mode output for better readability
+
+        * change createmode for /var/log/wtmp (644) and
+          /var/log/lastlog (600) in default /etc/watchlog.conf
+
+        * add some basic syslog logging
+
+        * daemon periodically verifies saved pid and shuts down
+          if not correct
+
+        * command flags for message mode are all upper case
+          (-D -T for debug and test) and debug mode is now available
+
+03/02/97
+
+
+        * add pid functions used to handle process pid and
+          check for previously running daemon
+
+        * dont run under an unrecognized name ie. not watchlog or 
+          watchlogd
+
+        * usage display adjusted for both variants watchlog and watchlogd
+
+        * watchlogd detects itself and runs as daemon (without -d flag)
+
+        * change messages levels
+          test is now debug and debug is one level lower
+          test is used to display trace for operating scenario
+          and debug will be used to show info related more to
+          code and system issues than to operation.
+
+
+
+03/01/97
+
+        * add sendlog {on|off} directive so can locally override
+          whether to send out a log but keep a global email addr
+          to send other logs to. for example, /var/log/wtmp should
+          not be sent since it is binary (not ascii) but will want
+          to retain send out removed log behavior from
+          /etc/watchlog.conf
+
+          new directive semantics for email addresses are:
+          
+           sendlogto <emailaddr>
+
+           senderrorsto <emailaddr>
+
+        * test mode shows postrotate script that would be executed
+        
+        * if in test mode show debug messages on stderr even if a
+          mailing address is given for the processing log
+ 
+        * directive to use a max file size to process is 'rotate filesize'
+          and maxsize is used to set size in K or M and mazsize is
+          not used if rotate is on a calendar interval like: daily,
+          weekly, or monthly
+
+        * don't allow processing interval > 24 hrs (must run at least
+          once a day since checks are made for 1st of month and 
+          1st of week )
+
+        * don't reread config files especially if in daemon mode!
+
+
+02/28/97
+
+        * add optional parameters for daemon: processing interval and 
+          first start time -- if not given ==> start time is now and 
+          interval is 24 hrs  
+        
+        * add daemon mode
+
+	* change command line option characters for --debug and --verbose
+
+	* add option -v --version
+
+
+02/26/97
+
+	* clean up some syntax of logrotate.c code to
+          be more semantically correct
+
+	* add code to try default config file /etc/watchlog.conf
+          and or directory /etc/watchlog.d if none specified on command 
+          line (which is now optional)
+
+	* change syntax of config file directives to be a more
+          meaningful grammar 
+
+
+
+
+from erik troan's logrotate
+
+2.0.2 -> 2.1:
+	- Don't output state information for logs that have never been
+	  rotated (better then 1900-1-0)
+	- Accept 1900-1-0 as time 0
+	
+2.0.1 -> 2.0.2:
+	- I have no idea :-(
+
+2.0 -> 2.0.1:
+	- ignore files in included directories which end with ~, .rpmorig, or
+	  .rpmsave
+	  

@@ -1,0 +1,330 @@
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <string.h>
+#include <syslog.h>
+
+
+#include <alloca.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
+#include "watchlog.h"
+#include "log.h"
+
+static int iMinLevel = MSG_NORMAL;
+static FILE *errorFile = stderr;
+static FILE *messageFile = stderr;
+static char myName[10];
+
+#define ERRFILE "/var/lib/watchlogd/errlog"
+static FILE *fErrorFile = stderr;
+static int fdErrorFile = 0;
+
+static unsigned nErrorMsgCount = 0;
+
+static int flags = 0;
+
+static void logSetErrorFile(FILE * f);
+static void logSetMessageFile(FILE * f);
+static void logSetFlag(int flags);
+static void logClearFlag(int flags);
+static BOOLEAN logOpenErrorFile();
+static BOOLEAN logCloseErrorFile();
+static BOOLEAN logPrintonErrorFile(char *);
+
+
+
+static BOOLEAN logOpenErrorFile()
+{
+    if (nErrorMsgCount == 0) {
+       
+	/* szErrorFileName = strdup(tmpnam(NULL)); */
+       
+       /* just avoid the public tmp dir
+	  not unique name is ok since only 
+	  one watch dee running at a time
+       */
+                 
+	fdErrorFile = open(ERRFILE, O_WRONLY | O_CREAT | O_EXCL, 0600);
+
+	if (fdErrorFile < 0) {
+
+if ( (!inDaemonMode())  || (inDaemonMode() && inTestMode()) ) {
+	    fprintf(stderr, "problem creating error file %s\n", ERRFILE);
+}
+
+	    return FALSE;
+	}
+	fErrorFile = fdopen(fdErrorFile, "w");
+
+	if (fErrorFile == NULL) {
+
+if ( (!inDaemonMode())  || (inDaemonMode() && inTestMode()) ) {
+
+	    fprintf(stderr, "problem opening file stream for: %s\n",
+		    ERRFILE);
+}
+	    return FALSE;
+	}
+	setlinebuf(fErrorFile);
+
+	return TRUE;
+    } else {
+	return FALSE;
+    }
+
+}
+
+static BOOLEAN logCloseErrorFile()
+{
+
+    BOOLEAN bReturn = FALSE;
+
+    if (fclose(fErrorFile) == 0) {
+	bReturn = TRUE;
+    }
+	unlink(ERRFILE);
+   
+
+    return bReturn;
+}
+
+static BOOLEAN logPrintonErrorFile(char *sz)
+{
+    fprintf(fErrorFile, sz);
+
+    if (fflush(fErrorFile) != 0) {
+	return FALSE;
+    }
+    return TRUE;
+
+}
+
+
+BOOLEAN logSendErrorLog(char *szMailAddr)
+{
+
+/* if any error msgs were logged then
+ * flush and close errorfile stream and
+ * try to send out error log file
+ * delete old errorlog file and
+ * set error msg count to zero so 
+ * error file will be opened again automatically
+ * when another error level msg is received
+ */
+
+    BOOLEAN bReturn = FALSE;
+    int sc = 0;
+    char buf[128 + 128 + 128];
+
+    if (nErrorMsgCount > 0) {
+
+
+	snprintf(buf, (sizeof(buf) - 1), "/bin/mail -s 'watchlogd error log' %s < %s\n", szMailAddr, ERRFILE);
+
+
+	buf[sizeof(buf) - 1] = '\0';
+
+	sc = system(buf);
+
+
+	if ((sc < 0) || (sc == 127)) {
+
+           
+	    logSyslog(LOG_WARNING, "problem mailing errorlog\n");
+
+	    bReturn = FALSE;
+	}
+
+	logCloseErrorFile();
+
+
+	nErrorMsgCount = 0;
+	bReturn = TRUE;
+    }
+    return bReturn;
+}
+
+
+
+void logSetMyName(char *sz)
+{
+
+    if (strlen(sz) < sizeof(myName)) {
+	message(MSG_DEBUG, "logSetMyName: (%s)\n", sz);
+	(void) strncpy(myName, sz, sizeof(myName) - 1);
+	myName[sizeof(myName) - 1] = '\0';
+	return;
+    }
+    message(MSG_DEBUG, "logSetMyName: invalid string\n");
+}
+
+
+void logSyslog(int iPriority, char *szMessage)
+{
+    openlog(myName, (LOG_NDELAY || LOG_PID), LOG_DAEMON);
+
+    syslog(iPriority, szMessage);
+    closelog();
+}
+
+
+void logSetLevel(int iLevel)
+{
+
+    iMinLevel = iLevel;
+    message(MSG_DEBUG, "set log level: %d\n", iLevel);
+
+}
+
+int logGetLevel(void)
+{
+
+    return iMinLevel;
+
+}
+
+
+void message(int level, char *szMsg,...)
+{
+    va_list args;
+    FILE *where = stderr;
+    BOOLEAN bIncludeTime = FALSE;
+    char buf[256];
+    char buf2[sizeof(buf) + 10]; /* the 10 is for length of
+                                  * "error: ", "debug: "...
+                                  */
+
+
+    if (level >= iMinLevel) {
+
+/* if first ERROR message */
+
+	if ((nErrorMsgCount == 0)
+	    && (level == MSG_ERR)) {
+
+	    logOpenErrorFile();
+	}
+	va_start(args, szMsg);
+
+	switch (level) {
+
+	case MSG_DEBUG:
+	    bIncludeTime = TRUE;
+	    where = stderr;
+	    break;
+
+	case MSG_TEST:
+	    where = stderr;
+	    break;
+
+	case MSG_ERR:
+	    nErrorMsgCount++;
+	    where = stderr;
+	    break;
+
+	default:
+	    where = stderr;
+	    break;
+	}
+
+	/*
+	 * include timestamp in message
+	 */
+
+         /* skip timestamping since this can
+          *    be done by using verbose mode
+          * and msgs going to syslog
+     
+	if (bIncludeTime && (flags & LOG_SHOWTIME)) {
+            	  
+           sprintf(buf, "[%ld]", (long) time(NULL));
+       }
+
+        */
+
+	/*
+	 * level id in front of msg
+	 */
+
+	if (level == MSG_DEBUG) {
+        strcpy(buf2,"debug: ");
+
+	} else if (level == MSG_ERR) {
+        strcpy(buf2,"error: ");
+
+	} else {
+
+        buf2[0] = '\0';
+        }
+
+	/*
+	 * safetly format msg in fixed length buffer
+	 */
+	vsnprintf(buf, sizeof(buf) - 1, szMsg, args);
+	buf[sizeof(buf) - 1] = '\0';
+        
+        strcat(buf2,buf);
+        buf2[sizeof(buf2) - 1] = '\0';
+
+	/* if running as daemon and in verbose mode
+	 * all messages go to syslog
+	 * and errors dupped to errorlogfile
+	 * but nothing goes to stdout or stderr
+	 * or anywhere else
+	 */
+
+	if (inDaemonMode() && inVerboseMode()) {
+
+	    logSyslog(LOG_INFO, buf2);
+
+
+	} else {
+           if ( !inDaemonMode() ) {
+
+	    fprintf(where, buf2);
+              }
+
+	}
+
+	/*
+	 * dup all error msgs to errorlogfile
+	 * (even in test mode)
+	 */
+	if (level == MSG_ERR) {
+	    logPrintonErrorFile(buf2);
+	}
+	fflush(where);
+	va_end(args);
+
+    }
+}
+
+
+static void logSetErrorFile(FILE * f)
+{
+    errorFile = f;
+}
+
+static void logSetMessageFile(FILE * f)
+{
+    messageFile = f;
+}
+
+static void logSetFlag(int newFlag)
+{
+    flags |= newFlag;
+}
+
+static void logClearFlag(int newFlag)
+{
+    flags &= ~newFlag;
+}

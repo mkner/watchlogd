@@ -1,0 +1,262 @@
+.TH WATCHLOG 8 "Mar 6 1997"
+.UC 4
+.SH NAME
+watchlogd \-  periodically moves logs into a rotation before 
+eventual deletion
+
+.SH SYNOPSIS
+\fBwatchlogd\fR [-DTV] [-a \fB<time>\fR] [-i \fB<interval>\fR] [-f 
+\fB<statusfile>\fR] [\fB<configfile>\fR+]
+
+\fBwatchlogd\fR [--debug] [--test] [--verbose]
+                [--start-at \fB<time>\fR]
+                [--interval \fB<interval>\fR] 
+                [--state-file \fB<statusfile>\fR]
+                [\fB<configfile>\fR+]
+
+.SH DESCRIPTION
+\fBwatchlogd\fR is a daemon that rotates backlogs daily, weekly,
+monthly or
+when a maximum file size is reached. It will wake up once or more a day 
+and check if any logs need processing. Old logs can be saved for a number of
+rotations and optionally compressed. The oldest log that is removed from
+the rotational sequence can also be emailed before deletion. A test mode can
+be enabled to debug and trace 
+operational scenarios without actually processing log files. For singular
+processing chores, the non-daemon variant \fBwatchlog\fR can be run.
+
+
+
+.SH OPTIONS
+.TP
+\fB-T -\-test\fR
+Turns on test mode which is used to 
+observe potential behavior and will not actually modify logs
+or the current operational state
+
+.TP
+\fB-V -\-verbose\fR
+Turns on verbose mode which actually processes logs but outputs the same 
+operational trace as test. If 
+running in daemon mode then messages are sent to 
+syslog including error messages which will also be sent out
+if \fBsenderrors\fR is \fBon\fR. If running as \fBwatchlog\fR then 
+messages go to stderr
+
+.TP
+\fB-D -\-debug\fR
+Turns on debug mode which is the same as test mode except that deeper 
+level messages are shown than in test mode.  
+Debug mode is used to observe potential behavior and will not actually modify logs
+or the current operational state.
+
+.TP
+\fB-a -\-start-at\fR \fItime\fR
+If running in daemon mode, this is the time to start the initial
+processing. \fItime\fR is a 24hr time (00:00 to 23:59).
+Command line option overrides \fBstart\fR in \fB/etc/watchlogd.conf\fR
+
+.TP
+\fB-i -\-interval\fR \fIvalue\fR
+If running in daemon mode, this is the time (in hours)
+between each log check and processing.
+Command line option overrides \fBinterval\fR in \fB/etc/watchlogd.conf\fR
+
+.TP
+\fB-s -\-state\-file <statusfile>\fR
+Tells \fBwatchlog\fR to use an alternate operational state file.  This is 
+useful if \fBwatchlog\fR is being run as different user(s) for various 
+sets of logs.  The default state file is \fB/var/lib/watchlog/status\fR.
+
+.TP
+\fB-u -? -\-usage\fR
+shows command line syntax
+
+.TP
+\fB-v -\-version\fR
+shows version
+
+.SH CONFIGURATION FILE
+
+When run, \fBwatchlogd\fR reads 
+\fB/etc/watchlog.conf\fR for runtime configuration. The 
+parameters found before any specific 
+logfile sections as treated as global settings. Some globals can be locally 
+overriden in individual logfile config sections. 
+\fBwatchlogd\fR will also attempt to parse config files located in the 
+default config directory \fB/etc/watchlog.d\fR
+
+Optionally, one or more config files (or directories of config files) may be 
+given on the command line with options in the later files overriding
+options in given in earlier files in the list.
+
+Each
+configuration file can set global options outside of a logfile 
+section. each section for a particular logfile, can contain local settings 
+that override the previous global ones
+
+Example: /fB/etc/watchlog.conf/fR
+
+.nf
+.ta +3i
+
+# /etc/watchlog.conf
+# default config for watchlogd
+
+# how to check log files: daily, weekly, monthly, filesize
+checklog weekly
+
+# keep backlogs for this number of rotations
+rotations 4
+
+# compression of backlogs?
+compress on
+
+# create a new log file after processing?
+createnew on
+
+# send removed log out?
+sendlog on
+
+# where to mail removed logs
+sendlog admin@gizmonics.edu
+
+# send out error log?
+senderrors on
+
+# where to send processing log
+senderrorsto admin@gizmonics.edu
+
+
+# include to use additional config files or directories
+# specifiy how to handle wtmp and lastlog in this config file
+
+/var/log/wtmp {
+
+    checklog monthly
+    rotations 12
+    compress on
+    sendlog off
+    createnew on
+    createmode 644 root root
+}
+
+/var/log/lastlog {
+
+    checklog monthly
+    rotations 12
+    compress on
+    sendlog off
+    createnew on
+    createmode 600 root root
+}
+
+.fi
+
+.pp
+
+
+.SH CONFIG FILE DIRECTIVES
+
+.TP
+\fBchecklog\fR {\fBdaily\fR|\fBweekly\fR|\fBmonthly\fR|\fBfilesize\fR}
+
+check logs for possible rotation:
+
+\fBdaily\fR Log files are rotation every day.
+
+\fBweekly\fR Log files are rotated on the first day of the week.
+
+\fBmonthly\fR Log files are rotated on the first day of every month.
+
+\fBfilesize\fR Log files are rotated when \fBmaxsize\fR is reached
+
+.TP
+\fBmaxsize \fIbytes\fR
+Log files are rotated when \fIbytes\fR size is reached if 
+.\fBcheck\fR \fIfilesize\fR is specified. If
+\fIbytes\fR is followed by \fIM\fR, then units are megabytes.
+If suffix is \fIK\fR , then units are kilobytes. For example, \fBmaxsize 
+ 1048576\fR, \fImaxsize 1000K\fR, \fImaxsize 1M\fR are all equivalent.
+
+.TP
+\fBrotations \fIcount\fR
+\fIcount\fR log files are kept in the rotation sequence before
+being removed. the removed log can be mailed to the
+address specified in the \fBsendlogto\fR directive before it
+is deleted. If \fIcount\fR is 0 then no backlogs are saved in
+the rotation sequence
+
+.TP
+\fBcompress\fR {\fBon\fR|\fBoff\fR}
+If \fBon\fR, logs kept in the rotation sequence are compressed with \fBgzip\fR.
+
+.TP
+\fBcreatemode \fImode\fR [\fIowner\fR] [\fIgroup\fR]
+If \fBcreatenew on\fR is specified, 
+then after rotation (but before the \fBpostrotate\fR script is run)
+a new log file is created (with the same name as the log file just rotated).
+\fImode\fR specifies the mode for the log file in octal (the same
+as \fBchmod(2)\fR), \fIowner\fR specifies the user name who will own the
+log file, and \fIgroup\fR specifies the group the log file will belong
+to 
+
+.TP
+\fBsendlog\fR {\fBon\fR|\fBoff\fR}
+If \fBon\fR, last log removed from rotation is sent to
+email address specified by \fBsendlogto\fR
+
+.TP
+\fBsendlogto \fIemailaddr\fR
+Last log removed from rotation is sent to
+\fIemailaddr\fR if \fBsendlog\fR is \fBon\fR
+
+.TP
+\fBsenderrors\fR {\fBon\fR|\fBoff\fR}
+If \fBon\fR, a log of all error messages is
+sent to email address specified by \fBsenderrorsto\fR
+
+.TP
+\fBsenderrorsto \fIemailaddr\fR
+Any errors that occur during log file processing are mailed to 
+\fIemailaddr\fR if \fBsenderrors\fR is \fBon\fR
+
+
+.TP
+\fBinclude\fB {\fIconfigdir\fR|\fIconfigfile\fR}
+Reads the \fIconfigfile\fR file or the files in \fIconfigdir\fR
+for config info.
+
+
+.TP
+\fBbegin postrotate\fR/\fBend\fR
+The lines between \fIbegin postrotate\fR and \fIend\fR (both of which
+must appear on lines by themselves) are executed after the log file is
+rotated. These directives are only valid inside of a log 
+file section. See \fBprerotate\fR as well.
+
+.TP
+\fBbegin prerotate\fR/\fBend\fR
+The lines between \fBbegin prerotate\fR and \fBend\fR (both of which
+must appear on lines by themselves) are executed before the log file is
+rotated. These directives are only valid inside of a log 
+file section. See \fBpostrotate\fR as well.
+
+
+.SH FILES
+.PD 0
+.TP 27
+\fI/etc/watchlogd.conf /var/lib/watchlogd/status\fR
+
+.SH SEE ALSO
+.IR gzip (1)
+
+.SH BUGS
+some
+
+.SH AUTHOR
+.nf
+Mike Knerr <mk@eonova.com>
+
+Many thanks to Erik Troan <ewt@redhat.com> for logrotate 
+.fi

@@ -1,0 +1,58 @@
+# /etc/watchlog.conf 
+# default config for watchlogd
+
+
+# how to check log files: daily, weekly, monthly, filesize, or off
+checklog weekly
+
+# keep backlogs for this number of rotations
+rotations 4
+
+# compression of backlogs?
+compress on
+
+# create a new log file after processing?
+createnew on
+
+# send removed log out?
+sendlog on
+
+# where to mail removed logs
+#sendlogto root
+
+# send out error log ?
+senderrors on
+
+# where to send processing log
+senderrorsto root
+
+
+# default included directory is /etc/watchlog.d use
+# the include directive to read an additional config file
+# or a directory of config files
+#include /etc/otherlogs
+
+
+# specifiy how to handle wtmp and lastlog in this config file
+
+/var/log/wtmp {
+   
+    checklog monthly
+    rotations 12
+    compress on
+    createnew on
+    createmode 644 root root
+    sendlog off
+}
+
+
+/var/log/lastlog {
+
+    checklog monthly
+    rotations 12
+    compress on
+    createnew on
+    createmode 600 root root
+    sendlog off
+}
+

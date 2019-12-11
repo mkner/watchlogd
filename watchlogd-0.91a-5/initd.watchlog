@@ -1,0 +1,42 @@
+#! /bin/sh
+#
+# init.d/watchlog      Start/Stop the cron watchlog daemon
+#
+# Author:       Mike Knerr
+#
+
+
+PSOPTS=-aux
+
+case "$1" in
+  start)
+	echo "Starting watchlog daemon..."
+	/usr/sbin/watchlogd -a 03:00
+	echo
+	touch /var/lock/watchlogd
+	;;
+
+  stop)
+
+	echo -n "Stopping  watchlog daemon... "
+
+        DPID=`ps $PSOPTS       	|
+        grep "watchlogd"        |
+        grep -v "grep"          |
+        grep -v "ps $PSOPTS"    |
+        awk '{print $2}'`
+
+        if [ "$DPID" != "" ]; then
+         echo "[$DPID] "
+         kill $DPID
+        fi
+        echo
+	rm -f /var/lock/watchlogd
+	;;
+
+  *)
+	echo "Usage: watchlog {start|stop}"
+	exit 1
+esac
+
+exit 0
